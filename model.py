@@ -1,7 +1,7 @@
 
 from torch import nn
 import torch.nn.functional as F
-
+import torch
 
 class CNNCifar(nn.Module):
     def __init__(self):
@@ -12,6 +12,7 @@ class CNNCifar(nn.Module):
         self.fc1 = nn.Linear(16 * 5 * 5, 120)
         self.fc2 = nn.Linear(120, 84)
         self.fc3 = nn.Linear(84, 10)
+        self.alpha = nn.Parameter(torch.randn(100, 100))
 
     def forward(self, x):
         x = self.pool(F.relu(self.conv1(x)))
@@ -21,3 +22,6 @@ class CNNCifar(nn.Module):
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
         return F.log_softmax(x, dim=1)
+
+
+

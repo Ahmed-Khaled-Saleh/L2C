@@ -1,9 +1,24 @@
 import torch
-from torch.utils.data import Subset, ConcatDataset, SubsetRandomSampler, DataLoader
+from torch.utils.data import(
+    Subset, 
+    ConcatDataset, 
+    SubsetRandomSampler, 
+    DataLoader,
+    random_split,
+)
+
 import numpy as np
 import log
 
-def local_sgd(node_number, model, theta, S, train_loader, optimizer, criterion, device):
+def local_sgd(node_number, 
+              model, 
+              theta, 
+              S, 
+              train_loader, 
+              optimizer, 
+              criterion, 
+              device):
+    
     log.info(f'Started training a Local SGD at node {node_number + 1}')
 
     model.load_state_dict(theta)
@@ -32,12 +47,12 @@ def compute_mixing_weights(alpha, neighbour_set):
     w /= torch.sum(w)
     return w
 
-def compute_test_acc(model, val_loader, device, test_accuracies, i):
+def compute_test_acc(model, test_loader, device, test_accuracies, i):
     model.eval()
     correct = 0
     total = 0
     with torch.no_grad():
-        for data in val_loader:
+        for data in test_loader:
             images, labels = data
             images, labels = images.to(device), labels.to(device)
             outputs = model(images)
@@ -50,15 +65,23 @@ def compute_test_acc(model, val_loader, device, test_accuracies, i):
 
 
 
-def get_loaders(data_set, indxs, tasks):
+def get_loaders(train_set, test_set, indxs, tasks):
 
-    loaders = []
+    train_loaders = []
+    val_loaders = []
+    test_loaders = []
+
     for i in range(len(tasks)):
-        subset_1 = Subset(data_set, indxs[tasks[i][0]])
-        subset_2 = Subset(data_set, indxs[tasks[i][1]])
+        subset_1 = Subset(train_set, indxs[tasks[i][0]])
+        subset_2 = Subset(train_set, indxs[tasks[i][1]])
 
         concatenated_dataset = ConcatDataset([subset_1, subset_2])
         num_samples = len(concatenated_dataset)
+
+        train_size = int(0.8 * num_samples)  # 80% for training
+        val_size = len(concatenated_dataset) - train_size 
+
+        train_dataset, val_dataset = random_split(concatenated_dataset, [train_size, val_size])
 
         indices = np.random.permutation(num_samples)
 
@@ -66,10 +89,19 @@ def get_loaders(data_set, indxs, tasks):
         sampler = SubsetRandomSampler(indices)
 
         # Create a dataloader with shuffled samples
-        loader = DataLoader(concatenated_dataset, sampler=sampler)
-        loaders.append(loader)
+        train_loader = DataLoader(train_dataset, sampler=sampler)
+        val_loader = DataLoader(val_dataset, sampler=sampler)
 
-    return loaders
+        # create the test loader
+        target_instances = [data for data in test_set if data[1] == tasks[i][0] or data[1] == tasks[i][1]]
+        subset_3 = Subset(target_instances, range(len(target_instances)))
+        test_loader = DataLoader(subset_3, batch_size=100, shuffle=True, num_workers=2)
+
+        train_loaders.append(train_loader)
+        val_loaders.append(val_loader)
+        test_loaders.append(test_loader)
+
+    return train_loaders, val_loaders, test_loaders
 
 
 
@@ -83,4 +115,22 @@ def plot_test_accuracies(test_accuracies, T, k, title):
     plt.legend()
     plt.title(title)
     plt.show()
+
+
+import sys
+from unittest.mock import patch
+from contextlib import contextmanager
+
+@contextmanager
+def tqdm_output(tqdm, write=sys.stderr.write):
+    def wrapper(message):
+        if message != '\n':
+            tqdm.clear()
+        write(message)
+        if '\n' in message:
+            tqdm.display()
+
+    with patch('sys.stdout', sys.stderr), patch('sys.stderr.write', wrapper):
+        yield tqdm
+
 

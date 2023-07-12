@@ -19,14 +19,26 @@ K_0 = 10
 
 
 classes_per_task, indexs = generate_non_iid_tasks(train_set)
-train_loaders = get_loaders(train_set, indexs, classes_per_task)
-val_loaders = get_loaders(train_set, indexs, classes_per_task)
+
+train_loaders, val_loaders, test_loaders = get_loaders(train_set, 
+                                                       test_set, 
+                                                       indexs, 
+                                                       classes_per_task)
 
 topology = Topolgy()
 
 topology.generate_graph(params = 0.2)
 neighbour_set =  nx.adjacency_matrix(topology.G).toarray()
 
-theta, test_accs = L2C(beta, neighbour_set, train_loaders, val_loaders, S, T, T_0, K_0)
+theta, test_accs = L2C(beta, 
+                       neighbour_set, 
+                       train_loaders, 
+                       val_loaders,
+                       test_loaders, 
+                       S, 
+                       T, 
+                       T_0, 
+                       K_0)
+
 
 plot_test_accuracies(test_accs, 100, k, 'L2C')
