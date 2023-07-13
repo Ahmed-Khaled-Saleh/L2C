@@ -78,15 +78,15 @@ def L2C(beta, neighbour_sets, train_loaders, val_loaders, test_loaders, S, T, T_
                     inputs, labels = inputs.to(device), labels.to(device)
                     
                     l2c_optimizer.zero_grad()
+                    model.alpha.requires_grad_(True)
 
                     outputs = model(inputs)
                     loss = criterion(outputs, labels)
-                    model.alpha.requires_grad_(True)
                     loss.backward()
                     l2c_optimizer.step()
 
                     # Update α[i]
-                    import pdb; pdb.set_trace()
+                    # import pdb; pdb.set_trace()
                     # alpha_grad = model.alpha.grad  # Access the computed gradients
                     # model.alpha.data[i] -= beta * alpha_grad[i]
                 
