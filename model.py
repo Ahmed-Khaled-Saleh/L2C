@@ -12,7 +12,7 @@ class CNNCifar(nn.Module):
         self.fc1 = nn.Linear(16 * 5 * 5, 120)
         self.fc2 = nn.Linear(120, 84)
         self.fc3 = nn.Linear(84, 10)
-        self.alpha = nn.Parameter(torch.randn(100, 100))
+        self.alpha = nn.Parameter(torch.randn(100, 100), requires_grad=True)
 
     def forward(self, x):
         x = self.pool(F.relu(self.conv1(x)))

@@ -19,7 +19,7 @@ K_0 = 10
 
 
 classes_per_task, indexs = generate_non_iid_tasks(train_set)
-
+# import pdb; pdb.set_trace()
 train_loaders, val_loaders, test_loaders = get_loaders(train_set, 
                                                        test_set, 
                                                        indexs, 

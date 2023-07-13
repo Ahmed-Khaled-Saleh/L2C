@@ -15,27 +15,40 @@ import log
 def L2C(beta, neighbour_sets, train_loaders, val_loaders, test_loaders, S, T, T_0, K_0):
     
     k = len(neighbour_sets)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if not torch.cuda.is_available() else "cpu")
     model = CNNCifar().to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=0.1)
-    l2c_optimizer = optim.Adam(model.parameters(), lr=beta, weight_decay=0.01)
+    l2c_optimizer = optim.Adam([model.alpha], lr=beta, weight_decay=0.01)
 
     test_accuracies = [[] for _ in range(k)]
 
     theta = [model.state_dict().copy() for _ in range(k)]
     theta_half = [model.state_dict().copy() for _ in range(k)]
 
-    w = torch.zeros(k, k)
+    w = torch.randn(k, k)
     delta_theta = [model.state_dict().copy() for _ in range(k)]
 
     with tqdm_output(tqdm(range(T))) as trange:
         for t in trange:
             for i in range(k):
                 # Local SGD step
-                # import pdb; pdb.set_trace()
-                new_state = local_sgd(i, model, theta[i], S, train_loaders[i], optimizer, criterion, device)
-                model.load_state_dict(new_state)
+                log.info(f'Started training a Local SGD at node {i + 1}')
+
+                model.load_state_dict(theta[i])
+                for m in range(S):
+                    for _, data in enumerate(train_loaders[i]):
+                        inputs, labels = data
+                        inputs, labels = inputs.to(device), labels.to(device)
+                        optimizer.zero_grad()
+                        outputs = model(inputs)
+                        loss = criterion(outputs, labels)
+                        loss.backward()
+                        optimizer.step()
+
+                log.info(f'Finished training a Local SGD at node {i + 1}')
+
+
 
                 # Change capturing
                 log.info(f'Computing change capturing at node {i + 1}')
@@ -59,20 +72,23 @@ def L2C(beta, neighbour_sets, train_loaders, val_loaders, test_loaders, S, T, T_
 
                 # Update L2C
                 log.info(f'Updating L2C at node {i + 1}')
-                model.load_state_dict(theta_next)
+                model.load_state_dict(theta_next) 
                 for _, data in enumerate(val_loaders[i]):
                     inputs, labels = data
                     inputs, labels = inputs.to(device), labels.to(device)
+                    
                     l2c_optimizer.zero_grad()
+
                     outputs = model(inputs)
                     loss = criterion(outputs, labels)
+                    model.alpha.requires_grad_(True)
                     loss.backward()
-                    # l2c_optimizer.step()
-                # import pdb
-                # pdb.set_trace()
-                # alpha[i] -= beta * alpha[i].grad
-                model.alpha.data[i] -= beta * model.alpha.grad[i]
-                model.alpha.grad.zero_()
+                    l2c_optimizer.step()
+
+                    # Update α[i]
+                    import pdb; pdb.set_trace()
+                    # alpha_grad = model.alpha.grad  # Access the computed gradients
+                    # model.alpha.data[i] -= beta * alpha_grad[i]
                 
 
                 # Remove edges for sparse topology

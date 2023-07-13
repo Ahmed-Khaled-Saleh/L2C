@@ -43,7 +43,8 @@ def compute_mixing_weights(alpha, neighbour_set):
     '''
     w = torch.zeros(len(neighbour_set))
     for i, j in enumerate(neighbour_set):
-        w[i] = torch.exp(alpha[i][j])
+        # import pdb; pdb.set_trace()
+        w[i] = torch.exp(alpha[j])
     w /= torch.sum(w)
     return w
 
@@ -83,14 +84,17 @@ def get_loaders(train_set, test_set, indxs, tasks):
 
         train_dataset, val_dataset = random_split(concatenated_dataset, [train_size, val_size])
 
-        indices = np.random.permutation(num_samples)
+        train_indices = train_dataset.indices
+        val_indices = val_dataset.indices
 
         # Use SubsetRandomSampler for shuffling
-        sampler = SubsetRandomSampler(indices)
+        train_sampler = SubsetRandomSampler(train_indices)
+        val_sampler = SubsetRandomSampler(val_indices)
+
 
         # Create a dataloader with shuffled samples
-        train_loader = DataLoader(train_dataset, sampler=sampler)
-        val_loader = DataLoader(val_dataset, sampler=sampler)
+        train_loader = DataLoader(train_dataset, shuffle= True)
+        val_loader = DataLoader(val_dataset, shuffle= True)
 
         # create the test loader
         target_instances = [data for data in test_set if data[1] == tasks[i][0] or data[1] == tasks[i][1]]
