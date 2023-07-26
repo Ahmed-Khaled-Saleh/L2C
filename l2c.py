@@ -16,7 +16,7 @@ def L2C(beta, neighbour_sets, train_loaders, val_loaders, test_loaders, S, T, T_
     
     k = len(neighbour_sets)
     device = torch.device("cuda" if not torch.cuda.is_available() else "cpu")
-    model = CNNCifar().to(device)
+    model = CNNCifar(neighbour_sets).to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=0.1)
     l2c_optimizer = optim.Adam([model.alpha], lr=beta, weight_decay=0.01)
@@ -26,25 +26,25 @@ def L2C(beta, neighbour_sets, train_loaders, val_loaders, test_loaders, S, T, T_
     theta = [model.state_dict().copy() for _ in range(k)]
     theta_half = [model.state_dict().copy() for _ in range(k)]
 
-    w = torch.randn(k, k)
+    # w = torch.randn(k, k, requires_grad=True)
     delta_theta = [model.state_dict().copy() for _ in range(k)]
 
-    with tqdm_output(tqdm(range(T))) as trange:
+    with tqdm(range(T)) as trange:
         for t in trange:
             for i in range(k):
                 # Local SGD step
                 log.info(f'Started training a Local SGD at node {i + 1}')
 
                 model.load_state_dict(theta[i])
-                for m in range(S):
-                    for _, data in enumerate(train_loaders[i]):
-                        inputs, labels = data
-                        inputs, labels = inputs.to(device), labels.to(device)
-                        optimizer.zero_grad()
-                        outputs = model(inputs)
-                        loss = criterion(outputs, labels)
-                        loss.backward()
-                        optimizer.step()
+                # for m in range(S):
+                #     for _, data in enumerate(train_loaders[i]):
+                #         inputs, labels = data
+                #         inputs, labels = inputs.to(device), labels.to(device)
+                #         optimizer.zero_grad()
+                #         outputs = model(inputs)
+                #         loss = criterion(outputs, labels)
+                #         loss.backward()
+                #         optimizer.step()
 
                 log.info(f'Finished training a Local SGD at node {i + 1}')
 
@@ -52,37 +52,43 @@ def L2C(beta, neighbour_sets, train_loaders, val_loaders, test_loaders, S, T, T_
 
                 # Change capturing
                 log.info(f'Computing change capturing at node {i + 1}')
+                import pdb; pdb.set_trace()
                 for name, param in model.named_parameters():
                     delta_theta[i][name] = theta[i][name] - theta_half[i][name]
 
                 log.info(f'Computing mixing weights at node {i + 1}')
                 # Mixing weights calculation
-                w[i] = compute_mixing_weights(model.alpha.data[i], neighbour_sets[i])
+                # model.w[i].data = compute_mixing_weights(model.alpha[i], neighbour_sets[i])
 
                 # Aggregation
                 log.info(f'Aggergating at node {i + 1}')
                 theta_next = {}
                 for name, param in model.named_parameters():
-                    theta_next[name] = theta[i][name].clone()
+                    theta_next[name] = theta[i][name]
 
                 for j in neighbour_sets[i]:
                     for name, param in model.named_parameters():
-                        theta_next[name] -= w[i][j].item() * delta_theta[i][name][j].clone()
+                        theta_next[name] -= model.w.data[i][j] * delta_theta[i][name][j]
 
 
                 # Update L2C
                 log.info(f'Updating L2C at node {i + 1}')
-                model.load_state_dict(theta_next) 
+                model.load_state_dict(theta_next)
+                model.train()
+                # a training loop to find alpha that minimizes the validation loss
                 for _, data in enumerate(val_loaders[i]):
                     inputs, labels = data
                     inputs, labels = inputs.to(device), labels.to(device)
                     
                     l2c_optimizer.zero_grad()
                     model.alpha.requires_grad_(True)
-
-                    outputs = model(inputs)
+                    
+                    log.info(f'Forward pass check')
+                    outputs = model(inputs, val=True)
                     loss = criterion(outputs, labels)
+                    # model.alpha.retain_grad()
                     loss.backward()
+                    print(f'gradient of alpha is {model.alpha.grad}')
                     l2c_optimizer.step()
 
                     # Update α[i]
@@ -92,10 +98,10 @@ def L2C(beta, neighbour_sets, train_loaders, val_loaders, test_loaders, S, T, T_
                 
 
                 # Remove edges for sparse topology
-                # if t == T_0:
-                #     for _ in range(K_0):
-                #         j = min(neighbour_sets[i], key=lambda x: w[i][x])
-                #         neighbour_sets[i].delete(j)
+                if t == T_0:
+                    for _ in range(K_0):
+                        j = min(neighbour_sets[i], key=lambda x: w[i][x])
+                        neighbour_sets[i].delete(j)
 
                 theta[i] = model.state_dict().copy()
                 theta_half[i] = model.state_dict().copy()

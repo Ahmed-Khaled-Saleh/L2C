@@ -39,13 +39,12 @@ def local_sgd(node_number,
 def compute_mixing_weights(alpha, neighbour_set):
     '''
         \highlightcyan{$w_{i,j}=\frac{\exp(\alpha_{i,j})}{\sum_{\ell\in i\cup N(i)}\exp(\alpha_{i,\ell})}$}
-        return the mixing weight where eeach element is computed as above
+        return the mixing weight where each element is computed as above
     '''
-    w = torch.zeros(len(neighbour_set))
+    w = torch.zeros(len(neighbour_set), dtype=alpha.dtype, device=alpha.device)
     for i, j in enumerate(neighbour_set):
-        # import pdb; pdb.set_trace()
         w[i] = torch.exp(alpha[j])
-    w /= torch.sum(w)
+    w /= w.sum()
     return w
 
 def compute_test_acc(model, test_loader, device, test_accuracies, i):
